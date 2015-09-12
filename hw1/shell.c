@@ -16,6 +16,7 @@
 #include "parse.h"
 #include "process.h"
 #include "shell.h"
+#include "myerror.h"
 
 int cmd_quit(tok_t arg[]) {
   printf("Bye\n");
@@ -105,6 +106,7 @@ process* create_process(char* inputString)
 
 int shell (int argc, char *argv[]) {
   char *s = malloc(INPUT_STRING_SIZE+1);			/* user input string */
+  char *pwd;
   tok_t *t;			/* tokens parsed from input */
   int lineNum = 0;
   int fundex = -1;
@@ -117,7 +119,10 @@ int shell (int argc, char *argv[]) {
   printf("%s running as PID %d under %d\n",argv[0],pid,ppid);
 
   lineNum=0;
-  fprintf(stdout, "%d: ", lineNum);
+  pwd=getcwd(NULL,0);
+  MYERROR(pwd);
+  fprintf(stdout, "[%s] %d: ",pwd, lineNum);
+  free(pwd);
   while ((s = freadln(stdin))){
     t = getToks(s); /* break the line into tokens */
     fundex = lookup(t[0]); /* Is first token a shell literal */
@@ -125,7 +130,10 @@ int shell (int argc, char *argv[]) {
     else {
       fprintf(stdout, "This shell only supports built-ins. Replace this to run programs as commands.\n");
     }
-    fprintf(stdout, "%d: ", lineNum);
+    pwd=getcwd(NULL,0);
+    MYERROR(pwd);
+    fprintf(stdout, "[%s] %d: ",pwd, lineNum);
+    free(pwd);
   }
   return 0;
 }
