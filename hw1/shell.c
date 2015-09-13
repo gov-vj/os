@@ -24,6 +24,30 @@ int cmd_quit(tok_t arg[]) {
   return 1;
 }
 
+int cmd_cd(tok_t arg[]){
+    char *pwd=getcwd(NULL,0);
+    MYERRORP(pwd);
+    else if(*arg==NULL || !strcmp("~",*arg))
+    {
+        MYERROR(chdir(getenv("HOME")));
+        MYERROR(setenv("OLDPWD",pwd,1));
+        free(pwd);
+    }
+    else if(!strcmp("-",*arg))
+    {
+        MYERROR(chdir(getenv("OLDPWD")));
+        MYERROR(setenv("OLDPWD",pwd,1));
+        free(pwd);
+    }
+    else
+    {
+        MYERROR(chdir(*arg));
+        MYERROR(setenv("OLDPWD",pwd,1));
+        free(pwd);
+    }
+    return 1;
+}
+
 int cmd_help(tok_t arg[]);
 
 
@@ -38,6 +62,7 @@ typedef struct fun_desc {
 fun_desc_t cmd_table[] = {
   {cmd_help, "?", "show this help menu"},
   {cmd_quit, "quit", "quit the command shell"},
+  {cmd_cd, "cd", "change directory"}
 };
 
 int cmd_help(tok_t arg[]) {
@@ -120,7 +145,7 @@ int shell (int argc, char *argv[]) {
 
   lineNum=0;
   pwd=getcwd(NULL,0);
-  MYERROR(pwd);
+  MYERRORP(pwd);   //Assuming no error
   fprintf(stdout, "[%s] %d: ",pwd, lineNum);
   free(pwd);
   while ((s = freadln(stdin))){
@@ -131,7 +156,7 @@ int shell (int argc, char *argv[]) {
       fprintf(stdout, "This shell only supports built-ins. Replace this to run programs as commands.\n");
     }
     pwd=getcwd(NULL,0);
-    MYERROR(pwd);
+    MYERRORP(pwd);  //Assuming no error
     fprintf(stdout, "[%s] %d: ",pwd, lineNum);
     free(pwd);
   }
