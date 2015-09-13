@@ -25,8 +25,8 @@ int cmd_quit(tok_t arg[]) {
 }
 
 int cmd_cd(tok_t arg[]){
-    char *pwd=getcwd(NULL,0);
-    MYERRORP(pwd);
+    char *pwd;
+    MYERRORPA(getcwd(NULL,0),pwd);
     else if(*arg==NULL || !strcmp("~",*arg))
     {
         MYERROR(chdir(getenv("HOME")));
@@ -144,8 +144,7 @@ int shell (int argc, char *argv[]) {
   printf("%s running as PID %d under %d\n",argv[0],pid,ppid);
 
   lineNum=0;
-  pwd=getcwd(NULL,0);
-  MYERRORP(pwd);   //Assuming no error
+  MYERRORPA(getcwd(NULL,0),pwd);   //Assuming no error
   fprintf(stdout, "[%s] %d: ",pwd, lineNum);
   free(pwd);
   while ((s = freadln(stdin))){
@@ -153,10 +152,19 @@ int shell (int argc, char *argv[]) {
     fundex = lookup(t[0]); /* Is first token a shell literal */
     if(fundex >= 0) cmd_table[fundex].fun(&t[1]);
     else {
-      fprintf(stdout, "This shell only supports built-ins. Replace this to run programs as commands.\n");
+        pid_t pid;
+        MYERRORA(fork(),pid);
+        else if(pid==0)
+        {
+            MYERROR(execvp(t[0],t));
+            exit(0);
+        }
+        else
+        {
+            MYERROR(wait(NULL));
+        }
     }
-    pwd=getcwd(NULL,0);
-    MYERRORP(pwd);  //Assuming no error
+    MYERRORPA(getcwd(NULL,0),pwd);   //Assuming no error
     fprintf(stdout, "[%s] %d: ",pwd, lineNum);
     free(pwd);
   }
