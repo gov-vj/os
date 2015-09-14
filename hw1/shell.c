@@ -5,12 +5,15 @@
 #include <errno.h>
 #include <unistd.h>
 #include <termios.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 
 #define FALSE 0
 #define TRUE 1
 #define INPUT_STRING_SIZE 80
+#define INITIAL_FD -5//any negative no. but -1 bcoz fd can be -1 or non-negative
 
 #include "io.h"
 #include "parse.h"
@@ -25,24 +28,30 @@ int cmd_quit(tok_t arg[]) {
 }
 
 int cmd_cd(tok_t arg[]){
-    char *pwd;
+    char *pwd=NULL;
     MYERRORPA(getcwd(NULL,0),pwd);
     else if(*arg==NULL || !strcmp("~",*arg))
     {
         MYERROR(chdir(getenv("HOME")));
-        MYERROR(setenv("OLDPWD",pwd,1));
+        else{
+            MYERROR(setenv("OLDPWD",pwd,1));
+        }
         free(pwd);
     }
     else if(!strcmp("-",*arg))
     {
         MYERROR(chdir(getenv("OLDPWD")));
-        MYERROR(setenv("OLDPWD",pwd,1));
+        else{
+            MYERROR(setenv("OLDPWD",pwd,1));
+        }
         free(pwd);
     }
     else
     {
         MYERROR(chdir(*arg));
-        MYERROR(setenv("OLDPWD",pwd,1));
+        else{
+            MYERROR(setenv("OLDPWD",pwd,1));
+        }
         free(pwd);
     }
     return 1;
@@ -131,7 +140,7 @@ process* create_process(char* inputString)
 
 int shell (int argc, char *argv[]) {
   char *s = malloc(INPUT_STRING_SIZE+1);			/* user input string */
-  char *pwd;
+  char *pwd=NULL;
   tok_t *t;			/* tokens parsed from input */
   int lineNum = 0;
   int fundex = -1;
@@ -149,20 +158,54 @@ int shell (int argc, char *argv[]) {
   free(pwd);
   while ((s = freadln(stdin))){
     t = getToks(s); /* break the line into tokens */
-    fundex = lookup(t[0]); /* Is first token a shell literal */
-    if(fundex >= 0) cmd_table[fundex].fun(&t[1]);
-    else {
-        pid_t pid;
-        MYERRORA(fork(),pid);
-        else if(pid==0)
-        {
-            MYERROR(execvp(t[0],t));
-            exit(0);
+    int i=0,fd=INITIAL_FD,bak_fd_i=INITIAL_FD,bak_fd_o=INITIAL_FD;
+    while(t[i]){
+        if(!strcmp(t[i],"<")){
+            MYERRORA(open(t[i+1],O_RDONLY),fd);
+            else{
+                MYERRORA(dup(STDIN_FILENO),bak_fd_i);
+                MYERROR(dup2(fd,STDIN_FILENO));
+                MYERROR(close(fd));
+            }
+            t[i]=NULL;
+            break;
         }
-        else
-        {
-            MYERROR(wait(NULL));
+        else if(!strcmp(t[i],">")){
+            MYERRORA(open(t[i+1],O_WRONLY|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH),fd);
+            else{
+                MYERRORA(dup(STDOUT_FILENO),bak_fd_o);
+                MYERROR(dup2(fd,STDOUT_FILENO));
+                MYERROR(close(fd));
+            }
+            t[i]=NULL;
+            break;
         }
+        i++;
+    }
+    if(fd>=0 || fd==INITIAL_FD){
+        fundex = lookup(t[0]); /* Is first token a shell literal */
+        if(fundex >= 0) cmd_table[fundex].fun(&t[1]);
+        else {
+            pid_t pid;
+            MYERRORA(fork(),pid);
+            else if(pid==0)
+            {
+                MYERROR(execvp(t[0],t));
+                exit(0);
+            }
+            else
+            {
+                MYERROR(wait(NULL));
+            }
+        }
+    }
+    if(bak_fd_i>=0){
+        MYERROR(dup2(bak_fd_i,STDIN_FILENO));
+        MYERROR(close(bak_fd_i));
+    }
+    if(bak_fd_o>=0){
+        MYERROR(dup2(bak_fd_o,STDOUT_FILENO));
+        MYERROR(close(bak_fd_o));
     }
     MYERRORPA(getcwd(NULL,0),pwd);   //Assuming no error
     fprintf(stdout, "[%s] %d: ",pwd, lineNum);
